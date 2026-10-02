@@ -1,5 +1,6 @@
 nvencodeapi_src = [
   'nvencodeapi.c',
+  'nvencodeapi_d3d11.c',
 ]
 
 thread_dep = dependency('threads')

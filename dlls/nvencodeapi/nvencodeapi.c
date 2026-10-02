@@ -27,6 +27,7 @@
 #include "wine/debug.h"
 
 #include "nvencodeapi.h"
+#include "nvencodeapi_d3d11.h"
 
 WINE_DEFAULT_DEBUG_CHANNEL(nvencodeapi);
 
@@ -35,6 +36,15 @@ static LINUX_NV_ENCODE_API_FUNCTION_LIST origFunctions;
 
 static NVENCSTATUS (*pNvEncodeAPICreateInstance)(LINUX_NV_ENCODE_API_FUNCTION_LIST *functionList);
 static NVENCSTATUS (*pNvEncodeAPIGetMaxSupportedVersion)(uint32_t* version);
+
+/* Runs a driver call with the CUDA context of a D3D11 session current, see nvencodeapi_d3d11.c. */
+#define WITH_CONTEXT(encoder, call) \
+    ({ BOOL pushed_ = d3d11_push_context(encoder); NVENCSTATUS status_ = (call); if (pushed_) d3d11_pop_context(); status_; })
+
+const LINUX_NV_ENCODE_API_FUNCTION_LIST *linux_functions(void)
+{
+    return &origFunctions;
+}
 
 static NVENCSTATUS WINAPI NvEncOpenEncodeSession(void *device, uint32_t deviceType, void **encoder)
 {
@@ -45,64 +55,64 @@ static NVENCSTATUS WINAPI NvEncOpenEncodeSession(void *device, uint32_t deviceTy
 static NVENCSTATUS WINAPI NvEncGetEncodeGUIDCount(void *encoder, uint32_t *encodeGUIDCount)
 {
     TRACE("(%p, %p)\n", encoder, encodeGUIDCount);
-    return origFunctions.nvEncGetEncodeGUIDCount(encoder, encodeGUIDCount);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncGetEncodeGUIDCount(encoder, encodeGUIDCount));
 }
 
 static NVENCSTATUS WINAPI NvEncGetEncodeGUIDs(void *encoder, GUID *GUIDs, uint32_t guidArraySize, uint32_t *GUIDCount)
 {
     TRACE("(%p, %p, %u, %p)\n", encoder, GUIDs, guidArraySize, GUIDCount);
-    return origFunctions.nvEncGetEncodeGUIDs(encoder, GUIDs, guidArraySize, GUIDCount);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncGetEncodeGUIDs(encoder, GUIDs, guidArraySize, GUIDCount));
 }
 
 static NVENCSTATUS WINAPI NvEncGetEncodeProfileGUIDCount(void *encoder, GUID encodeGUID, uint32_t *encodeProfileGUIDCount)
 {
     TRACE("(%p, %s, %p)\n", encoder, debugstr_guid(&encodeGUID), encodeProfileGUIDCount);
-    return origFunctions.nvEncGetEncodeProfileGUIDCount(encoder, encodeGUID, encodeProfileGUIDCount);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncGetEncodeProfileGUIDCount(encoder, encodeGUID, encodeProfileGUIDCount));
 }
 
 static NVENCSTATUS WINAPI NvEncGetEncodeProfileGUIDs(void *encoder, GUID encodeGUID, GUID *profileGUIDs,
                                                      uint32_t guidArraySize, uint32_t *GUIDCount)
 {
     TRACE("(%p, %s, %p, %u, %p)\n", encoder, debugstr_guid(&encodeGUID), profileGUIDs, guidArraySize, GUIDCount);
-    return origFunctions.nvEncGetEncodeProfileGUIDs(encoder, encodeGUID, profileGUIDs, guidArraySize, GUIDCount);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncGetEncodeProfileGUIDs(encoder, encodeGUID, profileGUIDs, guidArraySize, GUIDCount));
 }
 
 static NVENCSTATUS WINAPI NvEncGetInputFormatCount(void *encoder, GUID encodeGUID, uint32_t *inputFmtCount)
 {
     TRACE("(%p, %s, %p)\n", encoder, debugstr_guid(&encodeGUID), inputFmtCount);
-    return origFunctions.nvEncGetInputFormatCount(encoder, encodeGUID, inputFmtCount);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncGetInputFormatCount(encoder, encodeGUID, inputFmtCount));
 }
 
 static NVENCSTATUS WINAPI NvEncGetInputFormats(void *encoder, GUID encodeGUID, NV_ENC_BUFFER_FORMAT *inputFmts,
                                                uint32_t inputFmtArraySize, uint32_t *inputFmtCount)
 {
-    TRACE("(%p, %s, %p)\n", encoder, debugstr_guid(&encodeGUID), inputFmtCount);
-    return origFunctions.nvEncGetInputFormatCount(encoder, encodeGUID, inputFmtCount);
+    TRACE("(%p, %s, %p, %u, %p)\n", encoder, debugstr_guid(&encodeGUID), inputFmts, inputFmtArraySize, inputFmtCount);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncGetInputFormats(encoder, encodeGUID, inputFmts, inputFmtArraySize, inputFmtCount));
 }
 
 static NVENCSTATUS WINAPI NvEncGetEncodeCaps(void *encoder, GUID encodeGUID, NV_ENC_CAPS_PARAM *capsParam, int *capsVal)
 {
     TRACE("(%p, %s, %p, %p)\n", encoder, debugstr_guid(&encodeGUID), capsParam, capsVal);
-    return origFunctions.nvEncGetEncodeCaps(encoder, encodeGUID, capsParam, capsVal);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncGetEncodeCaps(encoder, encodeGUID, capsParam, capsVal));
 }
 
 static NVENCSTATUS WINAPI NvEncGetEncodePresetCount(void *encoder, GUID encodeGUID, uint32_t *encodePresetGUIDCount)
 {
     TRACE("(%p, %s, %p)\n", encoder, debugstr_guid(&encodeGUID), encodePresetGUIDCount);
-    return origFunctions.nvEncGetEncodePresetCount(encoder, encodeGUID, encodePresetGUIDCount);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncGetEncodePresetCount(encoder, encodeGUID, encodePresetGUIDCount));
 }
 
 static NVENCSTATUS WINAPI NvEncGetEncodePresetGUIDs(void *encoder, GUID encodeGUID, GUID *presetGUIDs, uint32_t guidArraySize,
                                                     uint32_t *encodePresetGUIDCount)
 {
     TRACE("(%p, %s, %p, %u, %p)\n", encoder, debugstr_guid(&encodeGUID), presetGUIDs, guidArraySize, encodePresetGUIDCount);
-    return origFunctions.nvEncGetEncodePresetGUIDs(encoder, encodeGUID, presetGUIDs, guidArraySize, encodePresetGUIDCount);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncGetEncodePresetGUIDs(encoder, encodeGUID, presetGUIDs, guidArraySize, encodePresetGUIDCount));
 }
 
 static NVENCSTATUS WINAPI NvEncGetEncodePresetConfig(void *encoder, GUID encodeGUID, GUID presetGUID, NV_ENC_PRESET_CONFIG *presetConfig)
 {
     TRACE("(%p, %s, %s, %p)\n", encoder, debugstr_guid(&encodeGUID), debugstr_guid(&presetGUID), presetConfig);
-    return origFunctions.nvEncGetEncodePresetConfig(encoder, encodeGUID, presetGUID, presetConfig);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncGetEncodePresetConfig(encoder, encodeGUID, presetGUID, presetConfig));
 }
 
 static NVENCSTATUS WINAPI NvEncInitializeEncoder(void *encoder, NV_ENC_INITIALIZE_PARAMS *createEncodeParams)
@@ -125,31 +135,31 @@ static NVENCSTATUS WINAPI NvEncInitializeEncoder(void *encoder, NV_ENC_INITIALIZ
         linux_encode_params.enableEncodeAsync = 0;
     }
 
-    return origFunctions.nvEncInitializeEncoder(encoder, createEncodeParams);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncInitializeEncoder(encoder, createEncodeParams));
 }
 
 static NVENCSTATUS WINAPI NvEncCreateInputBuffer(void *encoder, NV_ENC_CREATE_INPUT_BUFFER *createInputBufferParams)
 {
     TRACE("(%p, %p)\n", encoder, createInputBufferParams);
-    return origFunctions.nvEncCreateInputBuffer(encoder, createInputBufferParams);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncCreateInputBuffer(encoder, createInputBufferParams));
 }
 
 static NVENCSTATUS WINAPI NvEncDestroyInputBuffer(void *encoder, NV_ENC_INPUT_PTR inputBuffer)
 {
     TRACE("(%p, %p)\n", encoder, inputBuffer);
-    return origFunctions.nvEncDestroyInputBuffer(encoder, inputBuffer);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncDestroyInputBuffer(encoder, inputBuffer));
 }
 
 static NVENCSTATUS WINAPI NvEncCreateBitstreamBuffer(void *encoder, NV_ENC_CREATE_BITSTREAM_BUFFER *createBitstreamBufferParams)
 {
     TRACE("(%p, %p)\n", encoder, createBitstreamBufferParams);
-    return origFunctions.nvEncCreateBitstreamBuffer(encoder, createBitstreamBufferParams);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncCreateBitstreamBuffer(encoder, createBitstreamBufferParams));
 }
 
 static NVENCSTATUS WINAPI NvEncDestroyBitstreamBuffer(void *encoder, NV_ENC_OUTPUT_PTR bitstreamBuffer)
 {
     TRACE("(%p, %p)\n", encoder, bitstreamBuffer);
-    return origFunctions.nvEncDestroyBitstreamBuffer(encoder, bitstreamBuffer);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncDestroyBitstreamBuffer(encoder, bitstreamBuffer));
 }
 
 static NVENCSTATUS WINAPI NvEncEncodePicture(void *encoder, NV_ENC_PIC_PARAMS *encodePicParams)
@@ -157,7 +167,7 @@ static NVENCSTATUS WINAPI NvEncEncodePicture(void *encoder, NV_ENC_PIC_PARAMS *e
     NVENCSTATUS result;
     TRACE("(%p, %p)\n", encoder, encodePicParams);
 
-    result = origFunctions.nvEncEncodePicture(encoder, encodePicParams);
+    result = WITH_CONTEXT(encoder, origFunctions.nvEncEncodePicture(encoder, encodePicParams));
 
     if (encodePicParams->completionEvent)
         SetEvent(encodePicParams->completionEvent);
@@ -168,44 +178,44 @@ static NVENCSTATUS WINAPI NvEncEncodePicture(void *encoder, NV_ENC_PIC_PARAMS *e
 static NVENCSTATUS WINAPI NvEncLockBitstream(void *encoder, NV_ENC_LOCK_BITSTREAM *lockBitstreamBufferParams)
 {
     TRACE("(%p, %p)\n", encoder, lockBitstreamBufferParams);
-    return origFunctions.nvEncLockBitstream(encoder, lockBitstreamBufferParams);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncLockBitstream(encoder, lockBitstreamBufferParams));
 }
 
 static NVENCSTATUS WINAPI NvEncUnlockBitstream(void *encoder, NV_ENC_OUTPUT_PTR bitstreamBuffer)
 {
     TRACE("(%p, %p)\n", encoder, bitstreamBuffer);
-    return origFunctions.nvEncUnlockBitstream(encoder, bitstreamBuffer);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncUnlockBitstream(encoder, bitstreamBuffer));
 }
 
 static NVENCSTATUS WINAPI NvEncLockInputBuffer(void *encoder, NV_ENC_LOCK_INPUT_BUFFER *lockInputBufferParams)
 {
     TRACE("(%p, %p)\n", encoder, lockInputBufferParams);
-    return origFunctions.nvEncLockInputBuffer(encoder, lockInputBufferParams);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncLockInputBuffer(encoder, lockInputBufferParams));
 }
 
 static NVENCSTATUS WINAPI NvEncUnlockInputBuffer(void *encoder, NV_ENC_INPUT_PTR inputBuffer)
 {
     TRACE("(%p, %p)\n", encoder, inputBuffer);
-    return origFunctions.nvEncUnlockInputBuffer(encoder, inputBuffer);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncUnlockInputBuffer(encoder, inputBuffer));
 }
 
 static NVENCSTATUS WINAPI NvEncGetEncodeStats(void *encoder, NV_ENC_STAT *encodeStats)
 {
     TRACE("(%p, %p)\n", encoder, encodeStats);
-    return origFunctions.nvEncGetEncodeStats(encoder, encodeStats);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncGetEncodeStats(encoder, encodeStats));
 }
 
 static NVENCSTATUS WINAPI NvEncGetSequenceParams(void *encoder, NV_ENC_SEQUENCE_PARAM_PAYLOAD *sequenceParamPayload)
 {
     TRACE("(%p, %p)\n", encoder, sequenceParamPayload);
-    return origFunctions.nvEncGetSequenceParams(encoder, sequenceParamPayload);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncGetSequenceParams(encoder, sequenceParamPayload));
 }
 
 static NVENCSTATUS WINAPI NvEncRegisterAsyncEvent(void *encoder, NV_ENC_EVENT_PARAMS *eventParams)
 {
     TRACE("(%p, %p)\n", encoder, eventParams);
     /* This function will always fail as the linux NVIDIA driver doesn't support async mode */
-    /* return origFunctions.nvEncRegisterAsyncEvent(encoder, eventParams); */
+    /* return WITH_CONTEXT(encoder, origFunctions.nvEncRegisterAsyncEvent(encoder, eventParams)); */
     return NV_ENC_SUCCESS;
 }
 
@@ -213,74 +223,94 @@ static NVENCSTATUS WINAPI NvEncUnregisterAsyncEvent(void *encoder, NV_ENC_EVENT_
 {
     TRACE("(%p, %p)\n", encoder, eventParams);
     /* This function will always fail as the linux NVIDIA driver doesn't support async mode */
-    /* return origFunctions.nvEncUnregisterAsyncEvent(encoder, eventParams); */
+    /* return WITH_CONTEXT(encoder, origFunctions.nvEncUnregisterAsyncEvent(encoder, eventParams)); */
     return NV_ENC_SUCCESS;
 }
 
 static NVENCSTATUS WINAPI NvEncMapInputResource(void *encoder, NV_ENC_MAP_INPUT_RESOURCE *mapInputResParams)
 {
+    NVENCSTATUS status;
+
     TRACE("(%p, %p)\n", encoder, mapInputResParams);
-    return origFunctions.nvEncMapInputResource(encoder, mapInputResParams);
+    if (d3d11_map_input_resource(encoder, mapInputResParams, &status))
+        return status;
+    return WITH_CONTEXT(encoder, origFunctions.nvEncMapInputResource(encoder, mapInputResParams));
 }
 
 static NVENCSTATUS WINAPI NvEncUnmapInputResource(void *encoder, NV_ENC_INPUT_PTR mappedInputBuffer)
 {
     TRACE("(%p, %p)\n", encoder, mappedInputBuffer);
-    return origFunctions.nvEncUnmapInputResource(encoder, mappedInputBuffer);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncUnmapInputResource(encoder, mappedInputBuffer));
 }
 
 static NVENCSTATUS WINAPI NvEncDestroyEncoder(void *encoder)
 {
+    NVENCSTATUS status;
+
     TRACE("(%p)\n", encoder);
+    if (d3d11_destroy_encoder(encoder, &status))
+        return status;
     return origFunctions.nvEncDestroyEncoder(encoder);
 }
 
 static NVENCSTATUS WINAPI NvEncInvalidateRefFrames(void *encoder, uint64_t invalidRefFrameTimeStamp)
 {
     TRACE("(%p, %s)\n", encoder, wine_dbgstr_longlong(invalidRefFrameTimeStamp));
-    return origFunctions.nvEncInvalidateRefFrames(encoder, invalidRefFrameTimeStamp);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncInvalidateRefFrames(encoder, invalidRefFrameTimeStamp));
 }
 
 static NVENCSTATUS WINAPI NvEncOpenEncodeSessionEx(NV_ENC_OPEN_ENCODE_SESSION_EX_PARAMS *openSessionExParams, void **encoder)
 {
+    NVENCSTATUS status;
+
     TRACE("(%p, %p)\n", openSessionExParams, encoder);
+    if (d3d11_open_session(openSessionExParams, encoder, &status))
+        return status;
     return origFunctions.nvEncOpenEncodeSessionEx(openSessionExParams, encoder);
 }
 
 static NVENCSTATUS WINAPI NvEncRegisterResource(void *encoder, NV_ENC_REGISTER_RESOURCE *registerResParams)
 {
+    NVENCSTATUS status;
+
     TRACE("(%p, %p)\n", encoder, registerResParams);
-    return origFunctions.nvEncRegisterResource(encoder, registerResParams);
+    if (d3d11_register_resource(encoder, registerResParams, &status))
+        return status;
+    return WITH_CONTEXT(encoder, origFunctions.nvEncRegisterResource(encoder, registerResParams));
 }
 
 static NVENCSTATUS WINAPI NvEncUnregisterResource(void *encoder, NV_ENC_REGISTERED_PTR registeredResource)
 {
+    NVENCSTATUS status;
+
     TRACE("(%p, %p)\n", encoder, registeredResource);
-    return origFunctions.nvEncUnregisterResource(encoder, registeredResource);
+    if (d3d11_unregister_resource(encoder, registeredResource, &status))
+        return status;
+    return WITH_CONTEXT(encoder, origFunctions.nvEncUnregisterResource(encoder, registeredResource));
 }
 
 static NVENCSTATUS WINAPI NvEncReconfigureEncoder(void *encoder, NV_ENC_RECONFIGURE_PARAMS *reInitEncodeParams)
 {
     TRACE("(%p, %p)\n", encoder, reInitEncodeParams);
-    return origFunctions.nvEncReconfigureEncoder(encoder, reInitEncodeParams);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncReconfigureEncoder(encoder, reInitEncodeParams));
 }
 
 static NVENCSTATUS WINAPI NvEncCreateMVBuffer(void *encoder, NV_ENC_CREATE_MV_BUFFER *createMVBufferParams)
 {
     TRACE("(%p, %p)\n", encoder, createMVBufferParams);
-    return origFunctions.nvEncCreateMVBuffer(encoder, createMVBufferParams);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncCreateMVBuffer(encoder, createMVBufferParams));
 }
 
 static NVENCSTATUS WINAPI NvEncDestroyMVBuffer(void *encoder, NV_ENC_OUTPUT_PTR MVBuffer)
 {
     TRACE("(%p, %p)\n", encoder, MVBuffer);
-    return origFunctions.nvEncDestroyMVBuffer(encoder, MVBuffer);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncDestroyMVBuffer(encoder, MVBuffer));
 }
 
 static NVENCSTATUS WINAPI NvEncRunMotionEstimationOnly(void *encoder, NV_ENC_MEONLY_PARAMS *MEOnlyParams)
 {
     TRACE("(%p, %p)\n", encoder, MEOnlyParams);
-    return origFunctions.nvEncRunMotionEstimationOnly(encoder, MEOnlyParams);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncRunMotionEstimationOnly(encoder, MEOnlyParams));
 }
 
 static const char *WINAPI NvEncGetLastErrorString(void* encoder)
@@ -292,31 +322,31 @@ static const char *WINAPI NvEncGetLastErrorString(void* encoder)
 static NVENCSTATUS WINAPI NvEncSetIOCudaStreams(void* encoder, NV_ENC_CUSTREAM_PTR inputStream, NV_ENC_CUSTREAM_PTR outputStream)
 {
     TRACE("(%p, %p, %p)\n", encoder, inputStream, outputStream);
-    return origFunctions.nvEncSetIOCudaStreams(encoder, inputStream, outputStream);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncSetIOCudaStreams(encoder, inputStream, outputStream));
 }
 
 static NVENCSTATUS WINAPI NvEncGetEncodePresetConfigEx(void* encoder, GUID encodeGUID, GUID presetGUID, NV_ENC_TUNING_INFO tuningInfo, NV_ENC_PRESET_CONFIG *presetConfig)
 {
     TRACE("(%p, %s, %s, %u, %p)\n", encoder, debugstr_guid(&encodeGUID), debugstr_guid(&presetGUID), tuningInfo, presetConfig);
-    return origFunctions.nvEncGetEncodePresetConfigEx(encoder, encodeGUID, presetGUID, tuningInfo, presetConfig);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncGetEncodePresetConfigEx(encoder, encodeGUID, presetGUID, tuningInfo, presetConfig));
 }
 
 static NVENCSTATUS WINAPI NvEncGetSequenceParamEx(void* encoder, NV_ENC_INITIALIZE_PARAMS* encInitParams, NV_ENC_SEQUENCE_PARAM_PAYLOAD *sequenceParamPayload)
 {
     TRACE("(%p, %p, %p)\n", encoder, encInitParams, sequenceParamPayload);
-    return origFunctions.nvEncGetSequenceParamEx(encoder, encInitParams, sequenceParamPayload);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncGetSequenceParamEx(encoder, encInitParams, sequenceParamPayload));
 }
 
 static NVENCSTATUS WINAPI NvEncRestoreEncoderState(void* encoder, NV_ENC_RESTORE_ENCODER_STATE_PARAMS *restoreState)
 {
     TRACE("(%p, %p)\n", encoder, restoreState);
-    return origFunctions.nvEncRestoreEncoderState(encoder, restoreState);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncRestoreEncoderState(encoder, restoreState));
 }
 
 static NVENCSTATUS WINAPI NvEncLookaheadPicture(void* encoder, NV_ENC_LOOKAHEAD_PIC_PARAMS *lookaheadParams)
 {
     TRACE("(%p, %p)\n", encoder, lookaheadParams);
-    return origFunctions.nvEncLookaheadPicture(encoder, lookaheadParams);
+    return WITH_CONTEXT(encoder, origFunctions.nvEncLookaheadPicture(encoder, lookaheadParams));
 }
 
 NVENCSTATUS WINAPI NvEncodeAPIGetMaxSupportedVersion(uint32_t* version)
